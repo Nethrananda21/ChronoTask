@@ -20,7 +20,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   TimeOfDay? _selectedTime;
   DateTime? _selectedDate;
-  bool _hasAlarm = true;
+  bool _hasNotification = true; // Silent notification popup
+  bool _hasAlarm = false; // Continuous ringing alarm
+  String _selectedSound = 'assets/alarm.mp3'; // Default sound
   
   // Repeat days: 1=Monday, 2=Tuesday, ... 7=Sunday
   Set<int> _selectedDays = {};
@@ -138,7 +140,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           ? null
           : _descriptionController.text.trim(),
       scheduledTime: _scheduledDateTime,
+      hasNotification: _hasNotification && _scheduledDateTime != null,
       hasAlarm: _hasAlarm && _scheduledDateTime != null,
+      soundPath: _hasAlarm ? _selectedSound : null,
       isDaily: _selectedDays.length == 7, // For backwards compat
       repeatDays: _selectedDays.toList(),
       createdAt: DateTime.now(),
@@ -231,14 +235,29 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               ),
             if (_selectedDays.isEmpty) const SizedBox(height: 12),
 
+            // Notification toggle
+            _buildToggleRow(
+              icon: Icons.notifications_outlined,
+              title: 'Notification',
+              subtitle: 'Silent popup at scheduled time',
+              value: _hasNotification,
+              onChanged: (v) => setState(() => _hasNotification = v),
+            ),
+            const SizedBox(height: 12),
+
             // Alarm toggle
             _buildToggleRow(
               icon: Icons.alarm,
               title: 'Alarm',
-              subtitle: 'Get notified at scheduled time',
+              subtitle: 'Rings continuously until dismissed',
               value: _hasAlarm,
               onChanged: (v) => setState(() => _hasAlarm = v),
+              isAlarm: true,
             ),
+            if (_hasAlarm) ...[
+              const SizedBox(height: 12),
+              _buildSoundSelector(),
+            ],
             const SizedBox(height: 32),
 
             // Save button
@@ -352,16 +371,19 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     required String subtitle,
     required bool value,
     required Function(bool) onChanged,
+    bool isAlarm = false,
   }) {
+    final activeColor = isAlarm ? AppTheme.accentPink : AppTheme.accentPurple;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.surfaceCard,
         borderRadius: BorderRadius.circular(12),
+        border: isAlarm && value ? Border.all(color: activeColor.withOpacity(0.5)) : null,
       ),
       child: Row(
         children: [
-          Icon(icon, color: value ? AppTheme.accentPurple : Colors.white.withOpacity(0.4)),
+          Icon(icon, color: value ? activeColor : Colors.white.withOpacity(0.4)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -375,7 +397,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppTheme.accentPurple,
+            activeColor: activeColor,
           ),
         ],
       ),
@@ -409,6 +431,65 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+  Widget _buildSoundSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceCard,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Alarm Sound',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.6),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _soundOption('Classic Beep', 'assets/alarm.mp3'),
+              const SizedBox(width: 12),
+              _soundOption('Gentle Melody', 'assets/melodic.mp3'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _soundOption(String label, String path) {
+    final isSelected = _selectedSound == path;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedSound = path),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.accentPink.withOpacity(0.2) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? AppTheme.accentPink : Colors.white.withOpacity(0.1),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppTheme.accentPink : Colors.white.withOpacity(0.6),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
         ),
       ),
     );

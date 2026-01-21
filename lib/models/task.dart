@@ -28,8 +28,9 @@ class Task extends HiveObject {
   @HiveField(7)
   String timeElasticity;
 
+
   @HiveField(8)
-  bool hasAlarm;
+  bool hasAlarm; // Continuous ringing alarm
 
   @HiveField(9)
   String? category;
@@ -49,6 +50,12 @@ class Task extends HiveObject {
   @HiveField(14)
   List<int> repeatDays; // 1=Monday, 2=Tuesday, ... 7=Sunday (matches DateTime.weekday)
 
+  @HiveField(15)
+  bool hasNotification; // Silent notification popup
+
+  @HiveField(16)
+  String? soundPath; // Custom alarm sound path
+
   Task({
     required this.id,
     required this.title,
@@ -59,6 +66,8 @@ class Task extends HiveObject {
     this.focusType = 'routine',
     this.timeElasticity = 'flexible',
     this.hasAlarm = false,
+    this.hasNotification = true,
+    this.soundPath,
     this.category,
     required this.createdAt,
     this.alarmNotificationId,

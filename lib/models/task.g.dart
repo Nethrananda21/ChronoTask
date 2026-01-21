@@ -26,6 +26,8 @@ class TaskAdapter extends TypeAdapter<Task> {
       focusType: fields[6] as String,
       timeElasticity: fields[7] as String,
       hasAlarm: fields[8] as bool,
+      hasNotification: fields[15] as bool,
+      soundPath: fields[16] as String?,
       category: fields[9] as String?,
       createdAt: fields[10] as DateTime,
       alarmNotificationId: fields[11] as int?,
@@ -38,7 +40,7 @@ class TaskAdapter extends TypeAdapter<Task> {
   @override
   void write(BinaryWriter writer, Task obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -68,7 +70,11 @@ class TaskAdapter extends TypeAdapter<Task> {
       ..writeByte(13)
       ..write(obj.lastCompletedDate)
       ..writeByte(14)
-      ..write(obj.repeatDays);
+      ..write(obj.repeatDays)
+      ..writeByte(15)
+      ..write(obj.hasNotification)
+      ..writeByte(16)
+      ..write(obj.soundPath);
   }
 
   @override

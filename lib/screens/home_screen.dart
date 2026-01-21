@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
@@ -8,6 +10,7 @@ import '../widgets/task_card.dart';
 import 'add_task_screen.dart';
 import 'stats_screen.dart';
 import 'calendar_screen.dart';
+import 'alarm_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Task> _completedTasks = const [];
   int _streak = 0;
   bool _isLoading = true;
+  StreamSubscription? _alarmSubscription; // Add subscription
 
   @override
   void initState() {
@@ -28,9 +32,29 @@ class _HomeScreenState extends State<HomeScreen> {
     _init();
   }
 
+  @override
+  void dispose() {
+    _alarmSubscription?.cancel(); // Cancel subscription
+    super.dispose();
+  }
+
   Future<void> _init() async {
     await NotificationService.init();
     _loadTasks();
+    
+    // Listen for alarms
+    _alarmSubscription = Alarm.ringStream.stream.listen((alarmSettings) {
+      _navigateToAlarmScreen(alarmSettings); // Navigate instead of dialog
+    });
+  }
+
+  void _navigateToAlarmScreen(AlarmSettings alarmSettings) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AlarmScreen(alarmSettings: alarmSettings),
+      ),
+    );
   }
 
   void _loadTasks() {

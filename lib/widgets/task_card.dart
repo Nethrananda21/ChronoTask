@@ -24,12 +24,33 @@ class TaskCard extends StatelessWidget {
     
     return Dismissible(
       key: Key(task.id),
-      direction: DismissDirection.endToStart,
-      onDismissed: (_) => onDelete?.call(),
+      direction: DismissDirection.horizontal, // Enable both directions
+      onDismissed: (direction) {
+        if (direction == DismissDirection.startToEnd) {
+          onComplete(); // Swipe Right -> Complete
+        } else {
+          onDelete?.call(); // Swipe Left -> Delete
+        }
+      },
+      // Swipe Right (Start to End) -> Green/Complete
       background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        decoration: BoxDecoration(
+          color: AppTheme.accentGreen,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.check_circle_outline, color: Colors.white, size: 28),
+      ),
+      // Swipe Left (End to Start) -> Red/Delete
+      secondaryBackground: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_outline, color: AppTheme.accentPink),
+        decoration: BoxDecoration(
+          color: AppTheme.accentPink,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
       ),
       child: GestureDetector(
         onTap: onTap,

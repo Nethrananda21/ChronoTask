@@ -16,9 +16,11 @@ void main() async {
     ),
   );
 
-  // Initialize services
-  await StorageService.init();
-  await NotificationService.init();
+  // Initialize services in parallel for faster startup
+  await Future.wait([
+    StorageService.init(),
+    NotificationService.init(),
+  ]);
 
   runApp(const ChronoTaskApp());
 }

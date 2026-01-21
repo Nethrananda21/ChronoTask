@@ -1,42 +1,46 @@
+import 'package:alarm/alarm.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
 import '../models/task.dart';
 
-/// Battery-optimized notification service using Android's native AlarmManager.
-/// The app does NOT need to stay running - Android will wake it up when needed.
+/// Service handling both silent notifications (flutter_local_notifications)
+/// and continuous alarms (alarm package).
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
   static bool _initialized = false;
+  static const String _notificationChannelId = 'chronotask_notifications';
 
-  /// Initialize the notification service
+  /// Initialize mechanisms
   static Future<bool> init() async {
     if (_initialized) return true;
 
     try {
-      // Initialize timezone for India
+      // 1. Init Alarm package
+      await Alarm.init();
+
+      // 2. Init Timezones
       tz.initializeTimeZones();
       tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
 
-      // Create high-priority notification channel
-      const channel = AndroidNotificationChannel(
-        'chronotask_alarms',
-        'Task Alarms',
-        description: 'Notifications for scheduled tasks',
-        importance: Importance.high,
-      );
-
+      // 3. Init Local Notifications
       final androidPlugin = _notifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
 
       if (androidPlugin != null) {
-        await androidPlugin.createNotificationChannel(channel);
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _notificationChannelId,
+            'Task Notifications',
+            description: 'Reminder notifications for tasks',
+            importance: Importance.high,
+          ),
+        );
         await androidPlugin.requestNotificationsPermission();
-        await androidPlugin.requestExactAlarmsPermission();
       }
 
       const initSettings = InitializationSettings(
@@ -44,8 +48,9 @@ class NotificationService {
       );
 
       await _notifications.initialize(initSettings);
+      
       _initialized = true;
-      debugPrint('NotificationService: Initialized');
+      debugPrint('NotificationService: Initialized (Alarm + LocalNotifications)');
       return true;
     } catch (e) {
       debugPrint('NotificationService: Error during init: $e');
@@ -53,32 +58,11 @@ class NotificationService {
     }
   }
 
-  /// Show an immediate test notification
-  static Future<void> testNotification() async {
-    await init();
-    
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'chronotask_alarms',
-        'Task Alarms',
-        importance: Importance.high,
-        priority: Priority.high,
-      ),
-    );
-
-    await _notifications.show(
-      0,
-      '✅ ChronoTask',
-      'Notifications are working!',
-      details,
-    );
-  }
-
-  /// Schedule an alarm for a task using Android's native AlarmManager.
-  /// Battery efficient - app does NOT need to stay running.
-  static Future<void> scheduleTaskAlarm(Task task) async {
+  /// Schedule reminders
+  static Future<void> scheduleTaskReminder(Task task) async {
     try {
-      if (task.scheduledTime == null || !task.hasAlarm) return;
+      if (task.scheduledTime == null) return;
+      if (!task.hasNotification && !task.hasAlarm) return;
 
       await init();
 
@@ -90,58 +74,95 @@ class NotificationService {
         return;
       }
 
-      // Cancel existing alarm for this task
-      await cancelTaskAlarm(task);
+      // Cleanup existing
+      await cancelTaskReminder(task);
 
       final id = task.id.hashCode.abs() % 100000;
-      
-      // Safer timezone conversion
-      tz.TZDateTime tzTime;
-      try {
-        tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
-      } catch (e) {
-        debugPrint('NotificationService: Timezone error, falling back to UTC');
-        tzTime = tz.TZDateTime.from(scheduledTime, tz.UTC);
+      final alarmId = id + 50000;
+
+      // 1. Schedule Notification (Silent/Standard)
+      if (task.hasNotification) {
+        // Safer timezone conversion
+        tz.TZDateTime tzTime;
+        try {
+          tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
+        } catch (e) {
+          tzTime = tz.TZDateTime.from(scheduledTime, tz.UTC);
+        }
+
+        const notificationDetails = NotificationDetails(
+          android: AndroidNotificationDetails(
+            _notificationChannelId,
+            'Task Notifications',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        );
+
+        await _notifications.zonedSchedule(
+          id,
+          '📋 ${task.title}',
+          task.description ?? 'Task reminder',
+          tzTime,
+          notificationDetails,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+        debugPrint('NotificationService: Standard Notification scheduled id=$id');
       }
 
-      debugPrint('NotificationService: Scheduling "${task.title}" at $tzTime');
+      // 2. Schedule Alarm (Continuous Ringing via Alarm package)
+      if (task.hasAlarm) {
+        final alarmSettings = AlarmSettings(
+          id: alarmId,
+          dateTime: scheduledTime,
+      assetAudioPath: task.soundPath ?? 'assets/alarm.mp3',
+      loopAudio: true,
+      vibrate: true,
+      notificationSettings: NotificationSettings(
+        title: '🔔 ALARM: ${task.title}',
+        body: task.description ?? 'Tap to stop alarm',
+        stopButton: 'Stop Alarm',
+        icon: 'ic_launcher',
+      ),
+      warningNotificationOnKill: true,
+      androidFullScreenIntent: true,
+          volumeSettings: VolumeSettings.fade(
+            fadeDuration: const Duration(seconds: 3),
+            volume: null, // Use system volume (don't force 100%)
+            volumeEnforced: false, // Allow user to change volume
+          ),
+        );
 
-      const details = NotificationDetails(
-        android: AndroidNotificationDetails(
-          'chronotask_alarms',
-          'Task Alarms',
-          importance: Importance.high,
-          priority: Priority.high,
-          category: AndroidNotificationCategory.alarm,
-        ),
-      );
+        await Alarm.set(alarmSettings: alarmSettings);
+        debugPrint('NotificationService: Alarm package scheduled id=$alarmId at $scheduledTime');
+      }
 
-      await _notifications.zonedSchedule(
-        id,
-        '🔔 ${task.title}',
-        task.description ?? 'Time for your task!',
-        tzTime,
-        details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-
-      debugPrint('NotificationService: Alarm scheduled with id=$id');
     } catch (e) {
-      debugPrint('NotificationService: Error scheduling alarm: $e');
+      debugPrint('NotificationService: Error scheduling: $e');
     }
   }
 
-  /// Cancel a scheduled alarm
-  static Future<void> cancelTaskAlarm(Task task) async {
+  /// Cancel reminders
+  static Future<void> cancelTaskReminder(Task task) async {
     final id = task.id.hashCode.abs() % 100000;
+    
+    // Cancel notification
     await _notifications.cancel(id);
-    debugPrint('NotificationService: Cancelled alarm id=$id');
+    
+    // Cancel alarm
+    await Alarm.stop(id + 50000);
+    
+    debugPrint('NotificationService: Cancelled reminders for "${task.title}"');
   }
 
-  /// Cancel all scheduled alarms
   static Future<void> cancelAll() async {
     await _notifications.cancelAll();
+    await Alarm.stopAll();
   }
+
+  // Legacy
+  static Future<void> scheduleTaskAlarm(Task task) => scheduleTaskReminder(task);
+  static Future<void> cancelTaskAlarm(Task task) => cancelTaskReminder(task);
 }
