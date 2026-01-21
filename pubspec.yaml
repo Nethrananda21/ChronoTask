@@ -1,0 +1,35 @@
+name: chronotask
+description: "ChronoTask - Intelligent Time-Aware Todo App"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  # State Management
+  provider: ^6.1.2
+  # Local Database
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  # Notifications & Alarms
+  flutter_local_notifications: ^18.0.1
+  android_alarm_manager_plus: ^4.0.4
+  # Utilities
+  intl: ^0.20.0
+  uuid: ^4.5.1
+  # UI Enhancements
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.13
+
+flutter:
+  uses-material-design: true
