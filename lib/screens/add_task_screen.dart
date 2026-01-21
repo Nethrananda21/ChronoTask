@@ -107,15 +107,25 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
   DateTime? get _scheduledDateTime {
     if (_selectedTime == null) return null;
+    
     final now = DateTime.now();
-    final date = _selectedDays.isNotEmpty ? now : _selectedDate ?? now;
-    return DateTime(
+    var date = _selectedDays.isNotEmpty ? now : _selectedDate ?? now;
+    
+    // Create the scheduled datetime
+    var scheduled = DateTime(
       date.year,
       date.month,
       date.day,
       _selectedTime!.hour,
       _selectedTime!.minute,
     );
+    
+    // If using repeat days or today's date and time is in the past, use tomorrow
+    if ((_selectedDays.isNotEmpty || _selectedDate == null) && scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+    
+    return scheduled;
   }
 
   Future<void> _saveTask() async {

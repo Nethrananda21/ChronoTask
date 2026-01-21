@@ -17,12 +17,12 @@ dependencies:
   hive_flutter: ^1.1.0
   # Notifications & Alarms
   flutter_local_notifications: ^18.0.1
-  android_alarm_manager_plus: ^4.0.4
   # Utilities
   intl: ^0.20.0
   uuid: ^4.5.1
   # UI Enhancements
   google_fonts: ^6.2.1
+  table_calendar: ^3.2.0
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/task.dart';
 import '../theme/app_theme.dart';
 
+/// Optimized TaskCard with minimal rebuilds
 class TaskCard extends StatelessWidget {
   final Task task;
   final VoidCallback onComplete;
@@ -19,6 +20,8 @@ class TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isOverdue = task.isOverdue && !task.isCompleted;
+    
     return Dismissible(
       key: Key(task.id),
       direction: DismissDirection.endToStart,
@@ -30,55 +33,30 @@ class TaskCard extends StatelessWidget {
       ),
       child: GestureDetector(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
+        child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppTheme.surfaceCard,
             borderRadius: BorderRadius.circular(12),
-            border: task.isOverdue && !task.isCompleted
+            border: isOverdue 
                 ? Border.all(color: AppTheme.accentPink.withOpacity(0.5))
-                : Border.all(color: Colors.transparent),
+                : null,
           ),
           child: Row(
             children: [
-              // Animated Checkbox
-              GestureDetector(
+              _CheckBox(
+                isCompleted: task.isCompleted,
                 onTap: onComplete,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeInOut,
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: task.isCompleted
-                        ? AppTheme.accentGreen
-                        : Colors.transparent,
-                    border: Border.all(
-                      color: task.isCompleted
-                          ? AppTheme.accentGreen
-                          : Colors.white.withOpacity(0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: task.isCompleted
-                      ? const Icon(Icons.check, color: Colors.white, size: 14)
-                      : null,
-                ),
               ),
               const SizedBox(width: 14),
-              // Task info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 200),
+                    Text(
+                      task.title,
                       style: TextStyle(
-                        fontFamily: null, // Use system font
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
                         color: task.isCompleted
@@ -86,78 +64,106 @@ class TaskCard extends StatelessWidget {
                             : Colors.white,
                         decoration: task.isCompleted
                             ? TextDecoration.lineThrough
-                            : TextDecoration.none,
+                            : null,
                       ),
-                      child: Text(task.title),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        if (task.scheduledTime != null) ...[
-                          Text(
-                            DateFormat('h:mm a').format(task.scheduledTime!),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: task.isOverdue && !task.isCompleted
-                                  ? AppTheme.accentPink
-                                  : Colors.white.withOpacity(0.4),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (!task.isCompleted) _buildTimeRemaining(),
-                        ],
-                        if (task.isRepeating) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.repeat,
-                            size: 12,
-                            color: Colors.white.withOpacity(0.3),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            task.repeatDaysText,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.white.withOpacity(0.3),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+                    _TaskMeta(task: task, isOverdue: isOverdue),
                   ],
                 ),
               ),
-              // Alarm indicator
               if (task.hasAlarm && !task.isCompleted)
-                Icon(
-                  Icons.alarm,
-                  size: 16,
-                  color: Colors.white.withOpacity(0.3),
-                ),
+                Icon(Icons.alarm, size: 16, color: Colors.white.withOpacity(0.3)),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  Widget _buildTimeRemaining() {
+class _CheckBox extends StatelessWidget {
+  final bool isCompleted;
+  final VoidCallback onTap;
+
+  const _CheckBox({required this.isCompleted, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isCompleted ? AppTheme.accentGreen : Colors.transparent,
+          border: Border.all(
+            color: isCompleted ? AppTheme.accentGreen : Colors.white.withOpacity(0.3),
+            width: 2,
+          ),
+        ),
+        child: isCompleted
+            ? const Icon(Icons.check, color: Colors.white, size: 14)
+            : null,
+      ),
+    );
+  }
+}
+
+class _TaskMeta extends StatelessWidget {
+  final Task task;
+  final bool isOverdue;
+
+  const _TaskMeta({required this.task, required this.isOverdue});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (task.scheduledTime != null) ...[
+          Text(
+            DateFormat('h:mm a').format(task.scheduledTime!),
+            style: TextStyle(
+              fontSize: 12,
+              color: isOverdue ? AppTheme.accentPink : Colors.white.withOpacity(0.4),
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (!task.isCompleted) _TimeRemaining(task: task),
+        ],
+        if (task.isRepeating) ...[
+          const SizedBox(width: 8),
+          Icon(Icons.repeat, size: 12, color: Colors.white.withOpacity(0.3)),
+          const SizedBox(width: 4),
+          Text(
+            task.repeatDaysText,
+            style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.3)),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _TimeRemaining extends StatelessWidget {
+  final Task task;
+
+  const _TimeRemaining({required this.task});
+
+  @override
+  Widget build(BuildContext context) {
     if (task.scheduledTime == null) return const SizedBox.shrink();
 
-    final now = DateTime.now();
-    final diff = task.scheduledTime!.difference(now);
-
+    final diff = task.scheduledTime!.difference(DateTime.now());
+    
     String text;
     Color color;
 
     if (diff.isNegative) {
       final abs = diff.abs();
-      if (abs.inHours > 0) {
-        text = '${abs.inHours}h overdue';
-      } else {
-        text = '${abs.inMinutes}m overdue';
-      }
-      color = AppTheme.accentPink; // New Red/Orange color
+      text = abs.inHours > 0 ? '${abs.inHours}h overdue' : '${abs.inMinutes}m overdue';
+      color = AppTheme.accentPink;
     } else {
       if (diff.inHours > 0) {
         text = '${diff.inHours}h ${diff.inMinutes % 60}m';
@@ -171,11 +177,7 @@ class TaskCard extends StatelessWidget {
 
     return Text(
       text,
-      style: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w500,
-        color: color,
-      ),
+      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: color),
     );
   }
 }

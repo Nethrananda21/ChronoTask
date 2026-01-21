@@ -7,8 +7,8 @@ plugins {
 
 android {
     namespace = "com.chronotask.chronotask"
-    compileSdk = 34
-    ndkVersion = "26.3.11579264"
+    compileSdk = 35
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         // Enable desugaring for Java 8+ time APIs
@@ -24,7 +24,7 @@ android {
     defaultConfig {
         applicationId = "com.chronotask.chronotask"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
