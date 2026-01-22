@@ -3,7 +3,6 @@ import 'package:alarm/alarm.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
-import '../services/notification_service.dart';
 
 class AlarmScreen extends StatefulWidget {
   final AlarmSettings alarmSettings;

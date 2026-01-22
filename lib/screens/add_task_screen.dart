@@ -150,11 +150,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
     await StorageService.addTask(task);
 
-    if (task.hasAlarm) {
+    // Schedule notification/alarm if either is enabled
+    if (task.hasNotification || task.hasAlarm) {
       try {
-        await NotificationService.scheduleTaskAlarm(task);
+        await NotificationService.scheduleTaskReminder(task);
+        debugPrint('Notification scheduled for task: ${task.title}');
       } catch (e) {
-        debugPrint('Error scheduling alarm: $e');
+        debugPrint('Error scheduling notification: $e');
       }
     }
 

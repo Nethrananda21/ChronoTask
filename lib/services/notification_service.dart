@@ -1,8 +1,7 @@
 import 'package:alarm/alarm.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tzdata;
 import '../models/task.dart';
 
 /// Service handling both silent notifications (flutter_local_notifications)
@@ -12,19 +11,37 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   static bool _initialized = false;
+  static bool _permissionGranted = false;
   static const String _notificationChannelId = 'chronotask_notifications';
+
+  // Cached notification details for reuse
+  static const _notificationDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      _notificationChannelId,
+      'Task Notifications',
+      channelDescription: 'Reminder notifications for tasks',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+    ),
+  );
 
   /// Initialize mechanisms
   static Future<bool> init() async {
-    if (_initialized) return true;
+    if (_initialized) return _permissionGranted;
 
     try {
       // 1. Init Alarm package
       await Alarm.init();
 
       // 2. Init Timezones
-      tz.initializeTimeZones();
-      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      tzdata.initializeTimeZones();
+      try {
+        tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+      } catch (_) {
+        tz.setLocalLocation(tz.UTC);
+      }
 
       // 3. Init Local Notifications
       final androidPlugin = _notifications
@@ -38,9 +55,14 @@ class NotificationService {
             'Task Notifications',
             description: 'Reminder notifications for tasks',
             importance: Importance.high,
+            playSound: true,
+            enableVibration: true,
           ),
         );
-        await androidPlugin.requestNotificationsPermission();
+        
+        final notifPermission = await androidPlugin.requestNotificationsPermission();
+        await androidPlugin.requestExactAlarmsPermission();
+        _permissionGranted = notifPermission == true;
       }
 
       const initSettings = InitializationSettings(
@@ -48,121 +70,106 @@ class NotificationService {
       );
 
       await _notifications.initialize(initSettings);
-      
       _initialized = true;
-      debugPrint('NotificationService: Initialized (Alarm + LocalNotifications)');
-      return true;
-    } catch (e) {
-      debugPrint('NotificationService: Error during init: $e');
+      return _permissionGranted;
+    } catch (_) {
       return false;
     }
   }
 
+  /// Check if we have permission
+  static Future<bool> hasPermission() async {
+    final androidPlugin = _notifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    return androidPlugin != null 
+        ? (await androidPlugin.areNotificationsEnabled() ?? false)
+        : false;
+  }
+
   /// Schedule reminders
   static Future<void> scheduleTaskReminder(Task task) async {
-    try {
-      if (task.scheduledTime == null) return;
-      if (!task.hasNotification && !task.hasAlarm) return;
+    if (task.scheduledTime == null) return;
+    if (!task.hasNotification && !task.hasAlarm) return;
 
-      await init();
+    await init();
 
-      final scheduledTime = task.scheduledTime!;
-      final now = DateTime.now();
+    final scheduledTime = task.scheduledTime!;
+    final now = DateTime.now();
+    if (scheduledTime.isBefore(now)) return;
 
-      if (scheduledTime.isBefore(now)) {
-        debugPrint('NotificationService: Time in past, skipping');
-        return;
-      }
+    // Cleanup existing
+    await cancelTaskReminder(task);
 
-      // Cleanup existing
-      await cancelTaskReminder(task);
+    final id = task.id.hashCode.abs() % 100000;
 
-      final id = task.id.hashCode.abs() % 100000;
-      final alarmId = id + 50000;
+    // 1. Schedule Notification
+    if (task.hasNotification) {
+      final tzTime = tz.TZDateTime(
+        tz.local,
+        scheduledTime.year,
+        scheduledTime.month,
+        scheduledTime.day,
+        scheduledTime.hour,
+        scheduledTime.minute,
+      );
 
-      // 1. Schedule Notification (Silent/Standard)
-      if (task.hasNotification) {
-        // Safer timezone conversion
-        tz.TZDateTime tzTime;
-        try {
-          tzTime = tz.TZDateTime.from(scheduledTime, tz.local);
-        } catch (e) {
-          tzTime = tz.TZDateTime.from(scheduledTime, tz.UTC);
-        }
+      await _notifications.zonedSchedule(
+        id,
+        '📋 ${task.title}',
+        task.description ?? 'Task reminder',
+        tzTime,
+        _notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
+    }
 
-        const notificationDetails = NotificationDetails(
-          android: AndroidNotificationDetails(
-            _notificationChannelId,
-            'Task Notifications',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-        );
+    // 2. Schedule Alarm
+    if (task.hasAlarm) {
+      final alarmSettings = AlarmSettings(
+        id: id + 50000,
+        dateTime: scheduledTime,
+        assetAudioPath: task.soundPath ?? 'assets/alarm.mp3',
+        loopAudio: true,
+        vibrate: true,
+        notificationSettings: NotificationSettings(
+          title: '🔔 ALARM: ${task.title}',
+          body: task.description ?? 'Tap to stop alarm',
+          stopButton: 'Stop Alarm',
+          icon: 'ic_launcher',
+        ),
+        warningNotificationOnKill: true,
+        androidFullScreenIntent: true,
+        volumeSettings: VolumeSettings.fade(
+          fadeDuration: const Duration(seconds: 3),
+          volume: null,
+          volumeEnforced: false,
+        ),
+      );
 
-        await _notifications.zonedSchedule(
-          id,
-          '📋 ${task.title}',
-          task.description ?? 'Task reminder',
-          tzTime,
-          notificationDetails,
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-        );
-        debugPrint('NotificationService: Standard Notification scheduled id=$id');
-      }
-
-      // 2. Schedule Alarm (Continuous Ringing via Alarm package)
-      if (task.hasAlarm) {
-        final alarmSettings = AlarmSettings(
-          id: alarmId,
-          dateTime: scheduledTime,
-      assetAudioPath: task.soundPath ?? 'assets/alarm.mp3',
-      loopAudio: true,
-      vibrate: true,
-      notificationSettings: NotificationSettings(
-        title: '🔔 ALARM: ${task.title}',
-        body: task.description ?? 'Tap to stop alarm',
-        stopButton: 'Stop Alarm',
-        icon: 'ic_launcher',
-      ),
-      warningNotificationOnKill: true,
-      androidFullScreenIntent: true,
-          volumeSettings: VolumeSettings.fade(
-            fadeDuration: const Duration(seconds: 3),
-            volume: null, // Use system volume (don't force 100%)
-            volumeEnforced: false, // Allow user to change volume
-          ),
-        );
-
-        await Alarm.set(alarmSettings: alarmSettings);
-        debugPrint('NotificationService: Alarm package scheduled id=$alarmId at $scheduledTime');
-      }
-
-    } catch (e) {
-      debugPrint('NotificationService: Error scheduling: $e');
+      await Alarm.set(alarmSettings: alarmSettings);
     }
   }
 
   /// Cancel reminders
   static Future<void> cancelTaskReminder(Task task) async {
     final id = task.id.hashCode.abs() % 100000;
-    
-    // Cancel notification
-    await _notifications.cancel(id);
-    
-    // Cancel alarm
-    await Alarm.stop(id + 50000);
-    
-    debugPrint('NotificationService: Cancelled reminders for "${task.title}"');
+    await Future.wait([
+      _notifications.cancel(id),
+      Alarm.stop(id + 50000),
+    ]);
   }
 
   static Future<void> cancelAll() async {
-    await _notifications.cancelAll();
-    await Alarm.stopAll();
+    await Future.wait([
+      _notifications.cancelAll(),
+      Alarm.stopAll(),
+    ]);
   }
 
-  // Legacy
+  // Legacy aliases
   static Future<void> scheduleTaskAlarm(Task task) => scheduleTaskReminder(task);
   static Future<void> cancelTaskAlarm(Task task) => cancelTaskReminder(task);
 }

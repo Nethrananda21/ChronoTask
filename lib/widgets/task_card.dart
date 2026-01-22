@@ -25,11 +25,15 @@ class TaskCard extends StatelessWidget {
     return Dismissible(
       key: Key(task.id),
       direction: DismissDirection.horizontal, // Enable both directions
-      onDismissed: (direction) {
+      confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
-          onComplete(); // Swipe Right -> Complete
+          // Swipe Right -> Complete: Don't dismiss, let _loadTasks rebuild
+          onComplete();
+          return false;
         } else {
-          onDelete?.call(); // Swipe Left -> Delete
+          // Swipe Left -> Delete: Dismiss the widget
+          onDelete?.call();
+          return true;
         }
       },
       // Swipe Right (Start to End) -> Green/Complete

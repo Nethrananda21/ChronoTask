@@ -82,10 +82,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _toggleTask(Task task) async {
     await StorageService.toggleTaskCompletion(task.id);
-    if (task.isCompleted) {
-      await NotificationService.scheduleTaskAlarm(task);
-    } else {
+    // After toggle: if task is NOW completed, cancel alarm; if uncompleted, reschedule
+    final updatedTask = StorageService.getAllTasks().firstWhere((t) => t.id == task.id, orElse: () => task);
+    if (updatedTask.isCompleted) {
       await NotificationService.cancelTaskAlarm(task);
+    } else {
+      await NotificationService.scheduleTaskAlarm(task);
     }
     _loadTasks();
   }
